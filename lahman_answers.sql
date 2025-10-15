@@ -65,9 +65,73 @@ WHERE  yearid BETWEEN 1970 AND 2016
 	AND yearid <> '1981'
 ORDER BY w; -- excluded year 1981
 
--- how often does the most winning team get the worldseries, make it a percentage
+-- how often does the most winning team get the worldseries, make it a percentage, windo function?
+WITH max_wins AS(
+	SELECT name,yearid, MAX(w) OVER(PARTITION BY yearid) AS most_win,w,wswin
+	FROM teams
+	WHERE yearid >= 1970)
+SELECT COUNT(yearid) AS year,ROUND(COUNT(yearid)/(SELECT COUNT(DISTINCT yearid) FROM max_wins)::numeric*100,2) AS percentage-- add sub query
+FROM max_wins
+WHERE wswin = 'Y'
+	AND w = most_win;
 
-SELECT name, w, l, wswin, yearid, (w+l) AS total_games
-FROM teams
-WHERE yearid BETWEEN 1970 AND 2016
-ORDER BY yearid
+-- question 10 Find all players who hit their career highest number of home runs in 2016. Consider only players who have played in the league for at least 10 years,
+-- and who hit at least one home run in 2016. Report the players' first and last names and the number of home runs they hit in 2016.
+
+SELECT namefirst,namelast,((TO_DATE(finalgame, 'YYYY-MM-DD')-TO_DATE(debut, 'YYYY-MM-DD'))/364.25) AS total_years
+FROM people;-- total years active
+
+SELECT br.yearid,br.playerid,MAX(br.hr) AS most_hr, bl.yearid,bl.hr
+FROM batting AS br INNER JOIN batting AS bl USING(playerid)
+WHERE br.yearid = '2016'
+GROUP BY br.yearid,br.playerid,bl.yearid,bl.playerid,bl.hr
+ORDER BY most_hr DESC; -- where most home run is 2016
+
+
+WITH total_active_years AS (SELECT namefirst,namelast,playerid,((TO_DATE(finalgame, 'YYYY-MM-DD')-TO_DATE(debut, 'YYYY-MM-DD'))/364.25) AS total_years
+	FROM people)
+SELECT tay.namefirst,tay.namelast,hr
+FROM total_active_years AS tay JOIN batting AS b USING(playerid)
+WHERE yearid = '2016'
+	AND hr >= 1
+	AND total_years >= 10
+ORDER BY hr DESC;  --nearly there
+
+WITH total_active_years AS (SELECT namefirst,namelast,playerid,((TO_DATE(finalgame, 'YYYY-MM-DD')-TO_DATE(debut, 'YYYY-MM-DD'))/364.25) AS total_years
+	FROM people), most_homerun AS (
+		SELECT playerid, yearid, SUM(hr) AS year_hr, MAX(SUM(hr)) OVER(PARTITION BY playerid) AS player_max
+		FROM batting
+		WHERE playerid IN(SELECT playerid
+		FROM batting
+		WHERE yearid = 2016
+		GROUP BY playerid
+		HAVING(SUM(hr)>=1))
+		GROUP BY playerid, yearid
+		Order BY playerid, yearid)
+SELECT tay.namefirst,tay.namelast,year_hr
+FROM total_active_years AS tay JOIN most_homerun AS mh USING(playerid)
+WHERE  player_max >= 1
+	AND total_years >= 10
+	AND year_hr = player_max
+	AND yearid = '2016'
+ORDER BY year_hr DESC;
+
+-- question 12 explore the connection between number of wins and attendance.
+-- Does there appear to be any correlation between attendance at home games and number of wins
+-- Do teams that win the world series see a boost in attendance the following year? What about teams that made the playoffs? Making the playoffs means either being
+-- a division winner or a wild card winner
+
+SELECT *
+FROM homegames;
+SELECT *
+FROM teams;
+
+SELECT DISTINCT h.games, t.name,SUM(t.w)AS total_wins,SUM(t.l) AS total_loss,h.attendance,divwin,wcwin,yearid,CORR(t.w,h.attendance) OVER (PARTITION BY t.name) 
+	AS win_attendance
+FROM homegames AS h INNER JOIN teams AS t ON h.year = t.yearid
+WHERE w > games
+	AND h.attendance > 0
+	AND h.games > 12
+	AND divwin = 'Y'
+GROUP BY t.name,h.attendance,h.games,divwin,wcwin,yearid,t.w
+ORDER BY total_wins DESC;

@@ -158,16 +158,180 @@ AND yearid <> 1981
 ORDER BY w ;
 
 -----------How often from 1970 – 2016 was it the case that a team with the most wins also won the world series? What percentage of the time?
-
-----team with most wins also won the world series--
 ---max wins 114 who won world series---
-WITH most_wins AS (SELECT name,yearid, MAX(w)
+---teams with most wins also won the world series and the percentage
+---cte had teams most wins that year 
+---2016-1970-(47 years)- 1981 so 46 years
+WITH max_wins AS (SELECT yearid, MAX(w) AS max_wins
                    FROM teams
-                     WHERE wswin = 'Y'
-                    AND yearid BETWEEN 1970 AND 2016 
+                    WHERE yearid BETWEEN 1970 AND 2016 
                      AND yearid <> 1981
-					 GROUP BY name, yearid)
-
+					 GROUP BY yearid)
+SELECT COUNT(*) AS years_max_wins,
+       ROUND(COUNT(*) * 100.0 / 46, 2) AS percentage
+FROM max_wins AS ms
+INNER JOIN teams AS t
+  ON t.yearid = ms.yearid
+  AND t.w = ms.max_wins
+WHERE t.wswin = 'Y';
 				  
 
---------------
+------Q8,find the teams and parks which had the top 5 average attendance per game in 2016 (
+
+SELECT *
+FROM homegames;
+SELECT *
+FROM parks
+-----where average attendance is defined as total attendance divided by number of games
+
+SELECT h.team,p.park_name,ROUND(SUM(attendance)::numeric/SUM(h.games), 2) AS average_attendance
+FROM homegames AS h
+INNER JOIN parks AS p USING (park)
+WHERE h.year = 2016 AND h.games >= 10
+GROUP BY h.team,p.park_name
+ORDER BY average_attendance DESC
+LIMIT 5;
+
+------Repeat for the lowest 5 average attendance.
+SELECT h.team,p.park_name,ROUND(SUM(attendance)::numeric/SUM(h.games), 2) AS average_attendance
+FROM homegames AS h
+INNER JOIN parks AS p USING (park)
+WHERE h.year = 2016 AND h.games >= 10
+GROUP BY h.team,p.park_name
+ORDER BY average_attendance ASC
+LIMIT 5;
+
+------------------UNION WAY
+
+(SELECT h.team,p.park_name,ROUND(SUM(attendance)::numeric/SUM(h.games), 2) AS average_attendance
+FROM homegames AS h
+INNER JOIN parks AS p USING (park)
+WHERE h.year = 2016 AND h.games >= 10
+GROUP BY h.team,p.park_name
+ORDER BY average_attendance DESC
+LIMIT 5)
+UNION
+(SELECT h.team,p.park_name,ROUND(SUM(attendance)::numeric/SUM(h.games), 2) AS average_attendance
+FROM homegames AS h
+INNER JOIN parks AS p USING (park)
+WHERE h.year = 2016 AND h.games >= 10
+GROUP BY h.team,p.park_name
+ORDER BY average_attendance ASC
+LIMIT 5)
+
+
+--------Q,9...managers have won the TSN Manager of the Year award in both the National League (NL) and the American League (AL)....
+
+SELECT *
+FROM managers;
+SELECT *
+FROM awardsmanagers
+SELECT*
+FROM teams
+SELECT DISTINCT lgwin 
+FROM teams;
+
+WITH awards_manager AS (SELECT playerid,awardid
+                       FROM awardsmanagers
+                       WHERE awardid ILIKE '%TSN%'
+                        AND lgid IN ('NL','AL')
+						GROUP BY playerid,awardid
+						HAVING COUNT (DISTINCT lgid) = 2 );
+----name of the manger who won both (AL.NL)- Johnson Davey----
+SELECT DISTINCT(p.namefirst),p.namelast,t.name,a.lgid,a.yearid
+FROM awardsmanagers AS a
+INNER JOIN managers AS m USING (playerid, yearid)
+	INNER JOIN people AS p USING(playerid)
+	INNER JOIN teams AS t USING(teamid, yearid)
+WHERE a.playerid IN (SELECT playerid
+                       FROM awardsmanagers
+                       WHERE awardid ILIKE '%TSN%'
+                        AND lgid IN ('NL','AL')
+						GROUP BY playerid
+						HAVING COUNT (DISTINCT lgid) = 2 )
+ORDER BY p.namelast		
+
+----Q10,--players who hit their career highest number of home runs in 2016. --
+
+SELECT *
+FROM batting
+SELECT *
+FROM people;
+----------players who have played in the league for at least 10 years---
+WITH maxyears_players AS (SELECT playerid
+                             FROM batting 
+                             GROUP BY playerid
+                             HAVING COUNT(DISTINCT yearid) >= 10),
+---------------players career highest number of home runs -------------
+               max_2016players AS (SELECT playerid, MAX(hr) AS max_homeruns
+                                   FROM batting
+                                   GROUP BY playerid)
+SELECT p.namefirst,p.namelast,b.hr,b.yearid
+FROM batting AS b 
+INNER JOIN people  AS p USING (playerid)
+INNER JOIN maxyears_players AS m USING (playerid)
+INNER JOIN max_2016players AS mp USING(playerid)
+WHERE b.yearid = 2016 
+AND b.hr = mp.max_homeruns
+AND b.hr >= 1
+ORDER BY b.hr
+
+
+-----Q,11---correlation between number of wins and team salary
+
+SELECT *
+FROM teams
+
+SELECT *
+FROM salaries;
+
+SELECT teamid,COUNT(w)
+FROM teams
+WHERE yearid >= 2000
+GROUP BY teamid
+----I can see from year 2004 to 2006 correlation of salary is rising could be the reason of more total number of wins and teams are getting more salary--
+---after 2007 it started falling -smaller payroll player were more efficient compared to higher ones or might be the finacial reson..
+SELECT yearid, CORR(total_wins, total_salary) AS correlation_salary
+FROM(
+SELECT t.teamid,t.yearid ,t.w AS total_wins,SUM(s.salary) AS total_salary
+FROM teams AS t
+INNER JOIN salaries AS s USING (teamid,yearid)
+WHERE t.yearid >= 2000
+GROUP BY t.teamid,t.yearid,t.w
+ORDER BY t.yearid) AS yearly_wins_salary
+GROUP BY yearid
+ORDER BY yearid;
+
+-----Q,12..correlation between attendance at home games and number of wins----
+
+SELECT *
+FROM teams;
+SELECT *
+FROM homegames;
+
+---12 A.-Corelation between total wins and attendance----
+
+SELECT yearid,CORR (total_wins,total_attendance) AS correlation_wins_attendance
+FROM (SELECT t.yearid,t.teamid, t.w AS total_wins,SUM(h.attendance) AS total_attendance
+      FROM teams AS t
+      INNER JOIN homegames AS h ON t.teamid = h.team
+	  GROUP BY t.teamid,t.w,t.yearid) AS team_a
+GROUP BY yearid	  
+
+-------B-Do teams that win the world series see a boost in attendance the following year
+
+SELECT prev_t.yearid,prev_t.teamid,prev_t.attendance,next_t.yearid,next_t.teamid,next_t.attendance,next_t.attendance - prev_t.attendance AS attendance_boost
+FROM teams AS prev_t
+INNER JOIN teams AS next_t ON prev_t.teamid = next_t.teamid
+AND prev_t.yearid = next_t.yearid - 1
+WHERE prev_t.wswin= 'Y'
+AND next_t.attendance IS NOT NULL AND prev_t.attendance IS NOT NULL
+
+
+-------c--Making the playoffs means either being a division winner or a wild card winner(Wcwin-'y')
+SELECT prev_t.yearid AS previous_year,prev_t.teamid,prev_t.attendance,next_t.yearid AS next_year,next_t.teamid,next_t.attendance,next_t.attendance - prev_t.attendance AS attendance_boost
+FROM teams AS prev_t
+INNER JOIN teams AS next_t ON prev_t.teamid = next_t.teamid
+AND prev_t.yearid = next_t.yearid - 1
+WHERE prev_t.wcwin= 'Y'
+AND next_t.attendance IS NOT NULL AND prev_t.attendance IS NOT NULl		

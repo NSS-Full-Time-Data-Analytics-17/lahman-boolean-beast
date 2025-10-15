@@ -110,3 +110,125 @@ WHERE wswin = 'Y'
 
 
 ---Q8
+SELECT name, park_name, homegames.attendance/games AS avg_attendance_per_game		
+FROM homegames  LEFT JOIN teams ON team = teamid AND year = yearid
+				INNER JOIN parks ON homegames.park = parks.park
+WHERE year = 2016
+  AND games >= 10
+ORDER BY avg_attendance_per_game DESC
+LIMIT 5;
+---
+SELECT name, park_name, homegames.attendance/games AS avg_attendance_per_game		
+FROM homegames  LEFT JOIN teams ON team = teamid AND year = yearid
+				INNER JOIN parks ON homegames.park = parks.park
+WHERE year = 2016
+  AND games >= 10
+ORDER BY avg_attendance_per_game
+LIMIT 5;
+---
+
+
+---Q9 = 60
+SELECT namefirst, namelast, name
+FROM awardsmanagers LEFT JOIN managers USING(playerid, yearid)
+					LEFT JOIN teams USING(teamid, yearid)
+					LEFT JOIN people USING(playerid)
+WHERE awardID = 'TSN Manager of the Year'
+  AND awardsmanagers.lgid IN('NL', 'AL');
+
+
+---Q10
+SELECT playerid, namefirst, namelast, finalgame, debut, (TO_DATE(finalgame, 'YYYY-MM-DD')-TO_DATE(debut, 'YYYY-MM-DD'))/365.25 AS years_played
+FROM people
+WHERE namefirst = 'Justin'
+AND namelast = 'Upton'
+
+SELECT playerid, yearid, SUM(hr), MAX(SUM(hr)) OVER(PARTITION BY playerid) AS player_max
+FROM batting
+GROUP BY playerid, yearid
+ORDER BY playerid, yearid;
+
+SELECT playerid
+FROM batting
+WHERE yearid = 2016
+GROUP BY playerid
+HAVING(SUM(hr) > 0);
+
+WITH players_w_time AS (
+	SELECT playerid, namefirst, namelast, (TO_DATE(finalgame, 'YYYY-MM-DD')-TO_DATE(debut, 'YYYY-MM-DD'))/365.25 AS years_played
+	FROM people
+	),
+	max_hr AS 
+	(SELECT playerid, yearid, SUM(hr) AS year_max, MAX(SUM(hr)) OVER(PARTITION BY playerid) AS player_max
+	FROM batting 
+	WHERE playerid IN(SELECT playerid
+	FROM batting
+	WHERE yearid = 2016
+	GROUP BY playerid
+	HAVING(SUM(hr) >= 1))
+	GROUP BY playerid, yearid
+	ORDER BY playerid, yearid)
+SELECT namefirst, namelast, year_max
+FROM max_hr LEFT JOIN players_w_time USING(playerid)
+WHERE  years_played >= 10
+	AND year_max = player_max
+	AND yearid = 2016
+ORDER BY year_max;
+
+
+---Q11
+WITH ts AS (SELECT yearid, teamid, SUM(salary) AS total_salary, SUM(w) AS total_wins
+	  FROM salaries LEFT JOIN teams USING(teamid, yearid)
+	  WHERE yearid >= 2000
+	  GROUP BY yearid, teamid
+	  ORDER BY yearid, total_wins)
+
+SELECT yearid, teamid, CORR(total_salary, total_wins) OVER(PARTITION BY teamid) AS correlated
+FROM ts
+GROUP BY yearid, teamid, total_salary, total_wins
+ORDER BY yearid, total_wins;
+---maybe
+
+
+---Q12
+WITH taw AS (SELECT year, name, SUM(homegames.attendance) AS ta, SUM(w) AS tw
+			 FROM homegames  LEFT JOIN teams ON team = teamid AND year = yearid
+			 GROUP BY year, name
+			 HAVING(SUM(homegames.attendance) > 0)
+			 ORDER BY tw DESC)
+SELECT year, name, CORR(ta, tw) OVER(PARTITION BY name)
+FROM taw
+GROUP BY year, name, ta, tw
+ORDER BY year, tw DESC
+---
+SELECT t.name, t.yearid, t.attendance, t_1more.attendance, t_1more.attendance - t.attendance AS boost
+FROM teams AS t LEFT JOIN teams AS t_1more ON t.teamid = t_1more.teamid AND t.yearid = t_1more.yearid + 1
+WHERE t.wswin = 'Y'
+	AND t.attendance IS NOT NULL
+---no
+
+---Q13
+SELECT ROUND((SELECT COUNT(*)
+FROM people
+WHERE throws = 'L')/COUNT(*)::numeric*100,2) AS left_percent
+FROM people
+WHERE throws IN('R', 'L');
+---20.15%
+SELECT ROUND(COUNT(*)/(SELECT COUNT(*)
+					   FROM awardsplayers
+					   WHERE awardID = 'Cy Young Award')::numeric*100,2) AS left_percent
+FROM awardsplayers
+WHERE awardID = 'Cy Young Award'
+	AND playerid IN(SELECT DISTINCT playerid
+					FROM people
+					WHERE throws = 'L');
+---33.04% left is alittle more likely
+SELECT ROUND(COUNT(*)/(SELECT COUNT(*)
+					   FROM halloffame
+					   WHERE inducted = 'Y')::numeric*100,2) AS left_percent
+FROM halloffame
+WHERE inducted = 'Y'
+	AND playerid IN(SELECT DISTINCT playerid
+					FROM people
+					WHERE throws = 'L');
+---16.40% left is alittle less likely

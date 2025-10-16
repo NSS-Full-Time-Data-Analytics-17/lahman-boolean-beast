@@ -232,3 +232,82 @@ WHERE inducted = 'Y'
 					FROM people
 					WHERE throws = 'L');
 ---16.40% left is alittle less likely
+
+
+---BQ1---a
+SELECT DISTINCT lgid, (SELECT teamid
+						FROM (select teamid, lgid, dense_rank() over (partition by lgid order by w desc) as rnk
+   							from teams) lt
+						WHERE lt.lgid = t.lgid
+								AND rnk = 1)
+FROM teams t
+WHERE yearid = 2016;
+
+SELECT DISTINCT lgid, (SELECT teamid
+						FROM teams
+						WHERE lgid = t.lgid
+						ORDER BY w DESC
+						LIMIT 1)
+FROM teams t
+WHERE yearid = 2016;
+---b
+SELECT DISTINCT lgid, (SELECT teamid
+						FROM (select teamid, lgid, dense_rank() over (partition by lgid order by w desc) as rnk
+   							from teams) lt
+						WHERE lt.lgid = t.lgid
+								AND rnk = 1),
+						(SELECT w
+						FROM (select w, lgid, dense_rank() over (partition by lgid order by w desc) as rnk
+   							from teams) lt
+						WHERE lt.lgid = t.lgid
+								AND rnk = 1)
+FROM teams t
+WHERE yearid = 2016;
+
+SELECT DISTINCT lgid, (SELECT teamid
+						FROM teams
+						WHERE lgid = t.lgid
+						ORDER BY w DESC
+						LIMIT 1),
+						(SELECT w
+						FROM teams
+						WHERE lgid = t.lgid
+						ORDER BY w DESC
+						LIMIT 1)
+FROM teams t
+WHERE yearid = 2016;
+---c
+SELECT DISTINCT lgid, (SELECT DISTINCT ON (lgid) teamid
+						FROM teams
+						WHERE lgid = t.lgid
+						ORDER BY lgid, w DESC),
+						(SELECT DISTINCT ON (lgid) w
+						FROM teams
+						WHERE lgid = t.lgid
+						ORDER BY lgid, w DESC)
+FROM teams t
+WHERE yearid = 2016;
+---
+SELECT DISTINCT t.lgid, ts.teamid, ts.w
+FROM teams t, LATERAL (SELECT DISTINCT ON (lgid) teamid, w
+						FROM teams
+						WHERE lgid = t.lgid
+						ORDER BY lgid, w DESC) ts
+WHERE yearid = 2016;
+---d-e
+SELECT *
+FROM (SELECT DISTINCT lgid 
+	  FROM teams
+	  WHERE yearid = 2016) AS leagues,
+	  LATERAL ( SELECT  teamid, w
+						FROM teams
+						WHERE lgid = leagues.lgid
+						ORDER BY w DESC
+						LIMIT 3) as top_teams;
+
+
+---BQ2
+
+
+
+---BQ3

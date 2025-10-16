@@ -119,19 +119,40 @@ ORDER BY year_hr DESC;
 -- question 12 explore the connection between number of wins and attendance.
 -- Does there appear to be any correlation between attendance at home games and number of wins
 -- Do teams that win the world series see a boost in attendance the following year? What about teams that made the playoffs? Making the playoffs means either being
--- a division winner or a wild card winner
+-- a division winner or a wild card winner selfjoin on team id, yearid = yearid+1
 
 SELECT *
 FROM homegames;
 SELECT *
 FROM teams;
 
-SELECT DISTINCT h.games, t.name,SUM(t.w)AS total_wins,SUM(t.l) AS total_loss,h.attendance,divwin,wcwin,yearid,CORR(t.w,h.attendance) OVER (PARTITION BY t.name) 
+SELECT t.w,SUM(t.l) AS total_loss,h.attendance,CORR(t.w,h.attendance) OVER (PARTITION BY t.name) 
 	AS win_attendance
-FROM homegames AS h INNER JOIN teams AS t ON h.year = t.yearid
+FROM homegames AS h INNER JOIN teams AS t ON h.year = t.yearid AND h.team = t.teamid -- needed to add team id so that it would not compare it to everything in that year
 WHERE w > games
 	AND h.attendance > 0
 	AND h.games > 12
 	AND divwin = 'Y'
-GROUP BY t.name,h.attendance,h.games,divwin,wcwin,yearid,t.w
-ORDER BY total_wins DESC;
+GROUP BY h.attendance,yearid,t.w,t.name
+ORDER BY t.w DESC;
+
+SELECT t1.name,t1.w,t1.attendance,t2.w,t2.attendance
+FROM teams AS t1 INNER JOIN teams AS t2 ON t1.yearid = t2.yearid+1 AND t1.name = t2.name
+WHERE t1.divwin = 'Y'
+	OR t1.wcwin = 'Y'
+ORDER BY t2.attendance DESC;
+
+-- bonus 1; First, write a query utilizing a correlated subquery to find the team with the most wins from each league in 2016
+
+select DISTINCT lgid, MAX(w)
+from teams
+where yearid = 2016
+group by lgid
+order by MAX DESC;
+
+SELECT t.lgid,t.w,t.name
+FROM teams AS t
+WHERE t.w = (SELECT MAX(t2.w) AS total_wins 
+			FROM teams AS t2
+			where t.lgid = t2.lgid and t.yearid = t2.yearid)
+AND yearid = 2016;

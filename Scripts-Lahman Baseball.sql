@@ -335,3 +335,107 @@ INNER JOIN teams AS next_t ON prev_t.teamid = next_t.teamid
 AND prev_t.yearid = next_t.yearid - 1
 WHERE prev_t.wcwin= 'Y'
 AND next_t.attendance IS NOT NULL AND prev_t.attendance IS NOT NULl		
+
+
+---Q,13...determine just how rare left-handed pitchers are compared with right-handed pitchers. Are left-handed pitchers more likely to win the Cy Young Award
+SELECT *
+FROM people
+SELECT *
+FROM pitching;
+SELECT *
+FROM halloffame
+
+----Left hand--NUMBER of left hand player who selected for hall of fame is 23.....
+SELECT COUNT (DISTINCT p.playerid) AS number_lefthand_player
+FROM people AS p
+INNER JOIN pitching AS pi USING (playerid)
+INNER JOIN halloffame AS h USING (playerid)
+WHERE p.throws = 'L' and h.inducted = 'Y'
+
+---percentage of left hand player '22.00 AND RIGHT hand player-77.00--
+WITH hand_player AS (SELECT 
+                       SUM(CASE WHEN p.throws = 'L' THEN 1 ELSE 0 END) AS lefty,
+					   SUM(CASE WHEN p.throws ='R'THEN 1 ELSE 0 END) AS right_hand
+					   FROM people AS p
+					   INNER JOIN pitching AS pi USING (playerid)
+                       INNER JOIN halloffame AS h USING (playerid)
+					   WHERE h.inducted ='Y')
+SELECT lefty,right_hand,ROUND(lefty * 100 /(lefty + right_hand), 2)  AS lefty_percentage,ROUND(right_hand * 100 /(lefty + right_hand), 2) AS right_percentage
+from hand_player;
+
+
+-----Right hand---NUMBER of righ hand player who selected for hall of fame is 78....
+
+SELECT COUNT(DISTINCT p.playerid) AS number_righthand_player
+FROM people AS p
+INNER JOIN pitching AS pi USING (playerid)
+INNER JOIN halloffame AS h USING (playerid)
+WHERE p.throws = 'R' and h.inducted = 'Y'
+
+------------BONUS----------------------------------
+
+-------1,A....the team with the most wins from each league in 2016.....
+
+SELECT MAX(w)
+FROM teams
+
+SELECT t1.lgid,t1.teamid,t1.w
+FROM teams AS t1
+WHERE t1.w = (
+          SELECT MAX(t.w) AS max_wins
+          FROM teams AS t
+           WHERE t.lgid = t1.lgid AND t.yearid = t1.yearid) 
+AND t1.yearid = 2016;		   
+		   
+------if we wanted to pull in not just the teamid but also the number of wins, we couldn't do so using just a single subquery. (Try it and see the error you get).
+---error---subquery must return only one column
+SELECT t1.lgid,t1.teamid
+FROM teams AS t1
+WHERE t1.w = (
+          SELECT t1.teamid,MAX(t.w) AS max_wins
+          FROM teams AS t
+           WHERE t.lgid = t1.lgid AND t.yearid = t1.yearid) 
+AND t1.yearid = 2016
+GROUP BY lgid,t1.teamid;	
+
+-----Multiple corelated subquery--count of wins in select column and max number of wins among all wins in where  clause--
+SELECT 
+    t1.lgid,
+    (SELECT t2.teamid
+     FROM teams AS t2
+     WHERE t2.lgid = t1.lgid
+       AND t2.yearid = 2016
+     ORDER BY t2.w DESC
+     LIMIT 1) AS top_teamid,
+	 (SELECT t3.w
+     FROM teams AS t3
+     WHERE t3.lgid = t1.lgid
+       AND t3.yearid = 2016
+     ORDER BY t3.w DESC
+     LIMIT 1) AS top_wins
+FROM teams AS t1
+WHERE t1.yearid = 2016
+GROUP BY t1.lgid
+ORDER BY t1.lgid;
+
+		   
+-----c-- Rewrite your previous query into one which uses DISTINCT ON to return the top team by league in terms of number of wins in 2016.    
+-----Your query should return the league, the teamid, and the number of wins
+
+SELECT 
+   DISTINCT ON(t1.lgid)lgid,t1.teamid,t1.w
+FROM teams AS t1
+WHERE t1.yearid = 2016
+ORDER BY t1.lgid;
+---d-- Rewrite your previous query using the LATERAL keyword so that your result shows the teamid and number of wins for the team--
+-------with the most wins from each league in 2016.
+SELECT league_year.lgid,TEAMS1.W,teams1.teamid
+FROM (SELECT DISTINCT lgid
+FROM teams
+WHERE yearid = 2016) AS league_year,
+LATERAL(
+SELECT teamid,w
+FROM teams
+WHERE teams.lgid = league_year.lgid AND yearid =2016
+ORDER BY w DESC
+LIMIT 1) AS teams1;

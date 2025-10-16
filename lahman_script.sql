@@ -236,42 +236,25 @@ WHERE inducted = 'Y'
 
 ---BQ1---a
 SELECT DISTINCT lgid, (SELECT teamid
-						FROM (select teamid, lgid, dense_rank() over (partition by lgid order by w desc) as rnk
-   							from teams) lt
-						WHERE lt.lgid = t.lgid
-								AND rnk = 1)
-FROM teams t
-WHERE yearid = 2016;
-
-SELECT DISTINCT lgid, (SELECT teamid
 						FROM teams
 						WHERE lgid = t.lgid
+						AND yearid = 2016
 						ORDER BY w DESC
 						LIMIT 1)
 FROM teams t
 WHERE yearid = 2016;
 ---b
-SELECT DISTINCT lgid, (SELECT teamid
-						FROM (select teamid, lgid, dense_rank() over (partition by lgid order by w desc) as rnk
-   							from teams) lt
-						WHERE lt.lgid = t.lgid
-								AND rnk = 1),
-						(SELECT w
-						FROM (select w, lgid, dense_rank() over (partition by lgid order by w desc) as rnk
-   							from teams) lt
-						WHERE lt.lgid = t.lgid
-								AND rnk = 1)
-FROM teams t
-WHERE yearid = 2016;
 
 SELECT DISTINCT lgid, (SELECT teamid
 						FROM teams
 						WHERE lgid = t.lgid
+						AND yearid = 2016
 						ORDER BY w DESC
 						LIMIT 1),
 						(SELECT w
 						FROM teams
 						WHERE lgid = t.lgid
+						AND yearid = 2016
 						ORDER BY w DESC
 						LIMIT 1)
 FROM teams t
@@ -280,10 +263,12 @@ WHERE yearid = 2016;
 SELECT DISTINCT lgid, (SELECT DISTINCT ON (lgid) teamid
 						FROM teams
 						WHERE lgid = t.lgid
+						AND yearid = 2016
 						ORDER BY lgid, w DESC),
 						(SELECT DISTINCT ON (lgid) w
 						FROM teams
 						WHERE lgid = t.lgid
+						AND yearid = 2016
 						ORDER BY lgid, w DESC)
 FROM teams t
 WHERE yearid = 2016;
@@ -292,6 +277,7 @@ SELECT DISTINCT t.lgid, ts.teamid, ts.w
 FROM teams t, LATERAL (SELECT DISTINCT ON (lgid) teamid, w
 						FROM teams
 						WHERE lgid = t.lgid
+						AND yearid = 2016
 						ORDER BY lgid, w DESC) ts
 WHERE yearid = 2016;
 ---d-e
@@ -302,12 +288,29 @@ FROM (SELECT DISTINCT lgid
 	  LATERAL ( SELECT  teamid, w
 						FROM teams
 						WHERE lgid = leagues.lgid
+						AND yearid = 2016
 						ORDER BY w DESC
 						LIMIT 3) as top_teams;
 
 
----BQ2
-
+---BQ2---a
+SELECT TO_DATE(birthyear||'-'||birthmonth||'-'||birthday, 'YYYY-MM-DD') AS birthdate
+FROM people;
+---b
+SELECT namefirst, namelast, AGE(TO_DATE(debut, 'YYYY-MM-DD'),birthdate)
+FROM people, LATERAL ( SELECT TO_DATE(birthyear||'-'||birthmonth||'-'||birthday, 'YYYY-MM-DD') AS birthdate);
+---c
+SELECT namefirst, namelast, AGE(TO_DATE(debut, 'YYYY-MM-DD'),birthdate) AS age
+FROM people, LATERAL ( SELECT TO_DATE(birthyear||'-'||birthmonth||'-'||birthday, 'YYYY-MM-DD') AS birthdate)
+ORDER BY age
+LIMIT 1;
+---"Joe"	"Nuxhall"	"15 years 10 mons 11 days"
+---
+SELECT namefirst, namelast, AGE(TO_DATE(finalgame, 'YYYY-MM-DD'),birthdate) AS age
+FROM people, LATERAL ( SELECT TO_DATE(birthyear||'-'||birthmonth||'-'||birthday, 'YYYY-MM-DD') AS birthdate)
+ORDER BY age DESC NULLS LAST
+LIMIT 1;
+"Satchel"	"Paige"	"59 years 2 mons 18 days"
 
 
 ---BQ3
